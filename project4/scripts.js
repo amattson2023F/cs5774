@@ -74,6 +74,73 @@ $(function () {
         });
 });
 
+// Phase 2: load one sprite from PocketBase using the ID in detail.html?sprite=…
+$(function () {
+    const $layout = $(".sprite-detail .detail-layout");
+    if ($layout.length === 0) {
+        return;
+    }
+
+    const $status = $(".detail-status");
+    const spriteId = new URLSearchParams(window.location.search).get("sprite");
+
+    function showError(message) {
+        $layout.prop("hidden", true);
+        $status.attr("role", "alert").text(message);
+    }
+
+    if (!spriteId) {
+        showError("No sprite ID was provided. Return to the Sprites page and choose a sprite.");
+        return;
+    }
+
+    if (!window.spriteDexPocketBase) {
+        showError("Could not connect to PocketBase. The PocketBase SDK is unavailable.");
+        return;
+    }
+
+    window.spriteDexPocketBase.collection("sprites").getOne(spriteId)
+        .then(function (record) {
+            const name = record.name || "Unnamed Sprite";
+            const rarity = record.rarity || "";
+            const season = record.season || record.category || "";
+            const description = record.description || "No description is available for this sprite.";
+            const imageUrl = record.image
+                ? window.spriteDexPocketBase.files.getURL(record, record.image)
+                : "";
+            const variants = Array.isArray(record.variants)
+                ? record.variants
+                : (record.variants ? String(record.variants).split(",") : []);
+
+            $("[data-sprite-name]").text(name);
+            $("[data-sprite-name-detail]").text(name);
+            $("[data-sprite-rarity], [data-sprite-rarity-detail]").text(rarity);
+            $("[data-sprite-season], [data-sprite-season-detail]").text(season);
+            $("[data-sprite-description]").text(description);
+            $("[data-sprite-image]").attr({ src: imageUrl, alt: name });
+
+            const $variants = $("[data-sprite-variants]").empty();
+            variants.forEach(function (variant) {
+                $("<li>").text(String(variant).trim()).appendTo($variants);
+            });
+            if (variants.length === 0) {
+                $("<li>").text("No variants listed.").appendTo($variants);
+            }
+
+            document.title = name + " — SpriteDex";
+            $status.remove();
+            $layout.prop("hidden", false);
+        })
+        .catch(function (error) {
+            console.error("Unable to load sprite from PocketBase.", error);
+            if (error && error.status === 404) {
+                showError("Sprite not found. Check the URL or return to the Sprites page.");
+                return;
+            }
+            showError("Could not load this sprite. Check that PocketBase is running and try again.");
+        });
+});
+
 $(function () {
     const $searchResults = $("#search-results");
 

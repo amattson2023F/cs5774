@@ -7,8 +7,10 @@
     <title>SpriteDex</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="detail.css">
+    <script src="https://unpkg.com/pocketbase@0.26.2/dist/pocketbase.umd.js" defer></script>
+    <script src="pocketbase-client.js" defer></script>
     <script src="assets/jquery-3.7.1.min.js" defer></script>
-    <script src="scripts.js" defer></script>
+    <script src="scripts.js?v=phase2" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main">Skip to main content</a>
@@ -31,37 +33,33 @@
         </div>
     </header>
     <main class="container sprite-detail" id="main">
-        <p><a href="list.html">← Back to My Collection</a></p>
+        <p><a href="home.html#explore">← Back to Sprites</a></p>
+        <p class="detail-status" role="status" aria-live="polite">Loading sprite…</p>
 
-        <!-- This static page shows Adventure Sprite for every detail link. -->
-        <div class="detail-layout">
+        <!-- The detail content is populated from PocketBase by scripts.js. -->
+        <div class="detail-layout" hidden>
             <div class="detail-heading">
-                <h1>Adventure Sprite</h1>
+                <h1 data-sprite-name>Sprite</h1>
                 <ul class="tags" aria-label="Sprite attributes">
-                    <li>Rare</li>
-                    <li>Chapter 7 Season 4</li>
+                    <li data-sprite-rarity></li>
+                    <li data-sprite-season></li>
                 </ul>
             </div>
 
             <div class="detail-artwork">
 
                 <!-- adventure.webp: https://fortnite.gg/ -->
-                <img class="sprite-portrait" src="assets/adventure.webp" alt="Adventure Sprite">
+                <img class="sprite-portrait" data-sprite-image src="" alt="">
                 <section class="sprite-about" aria-labelledby="about-title">
                     <h2 id="about-title">About This Sprite</h2>
-                    <p>Upgrades a random item in the player's inventory with each Level Up!</p>
+                    <p data-sprite-description></p>
                     <dl>
-                        <dt>Name</dt><dd>Adventure Sprite</dd>
-                        <dt>Rarity</dt><dd>Rare</dd>
-                        <dt>Introduced</dt><dd>Chapter 7 Season 4</dd>
+                        <dt>Name</dt><dd data-sprite-name-detail></dd>
+                        <dt>Rarity</dt><dd data-sprite-rarity-detail></dd>
+                        <dt>Introduced</dt><dd data-sprite-season-detail></dd>
                     </dl>
                     <h3>Variants</h3>
-                    <ul>
-                        <li>Gold</li>
-                        <li>Cheat Master</li>
-                        <li>Loot Hacker</li>
-                        <li>Bounty Hunter</li>
-                    </ul>
+                    <ul data-sprite-variants></ul>
                 </section>
             </div>
 
