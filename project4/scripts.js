@@ -1,4 +1,79 @@
 /* Shared behavior for the SpriteDex prototype. */
+
+// Phase 1: load the public sprites collection into the existing browse grid.
+$(function () {
+    const $grid = $(".explore .sprite-grid");
+    if ($grid.length === 0) {
+        return;
+    }
+
+    const $explore = $grid.closest(".explore");
+    const $status = $("<p>", { class: "browse-status", role: "status", "aria-live": "polite" })
+        .insertBefore($grid);
+    $grid.empty();
+    $status.text("Loading sprites…");
+
+    function getImageUrl(record) {
+        if (!record.image) {
+            return "";
+        }
+        return window.spriteDexPocketBase.files.getURL(record, record.image);
+    }
+
+    function escapeText(value) {
+        return value == null ? "" : String(value);
+    }
+
+    function renderSprites(records) {
+        records.forEach(function (record) {
+            const name = escapeText(record.name || "Unnamed Sprite");
+            const description = escapeText(record.season || record.category || "");
+            const rarity = escapeText(record.rarity || "");
+            const imageUrl = getImageUrl(record);
+            const $card = $("<article>", { class: "sprite-card" });
+            const $link = $("<a>", { href: "detail.html?sprite=" + encodeURIComponent(record.id) });
+            const $art = $("<div>", { class: "card-art" });
+            const $image = $("<img>", { alt: name });
+            if (imageUrl) {
+                $image.attr("src", imageUrl);
+            }
+            const $copy = $("<div>", { class: "card-copy" });
+            $("<h3>").text(name).appendTo($copy);
+            $("<p>").text(description).appendTo($copy);
+            const $tags = $("<ul>", { class: "tags", "aria-label": "Sprite attributes" });
+            if (rarity) {
+                $("<li>").text(rarity).appendTo($tags);
+            }
+            $image.appendTo($art);
+            $art.appendTo($link);
+            $copy.appendTo($link);
+            $tags.appendTo($copy);
+            $link.appendTo($card);
+            $card.appendTo($grid);
+        });
+    }
+
+    if (!window.spriteDexPocketBase) {
+        $status.attr("role", "alert").text("Could not connect to PocketBase. The PocketBase SDK is unavailable.");
+        return;
+    }
+
+    window.spriteDexPocketBase.collection("sprites").getFullList({ sort: "name" })
+        .then(function (records) {
+            if (records.length === 0) {
+                $status.text("No sprites are available yet.");
+                return;
+            }
+            $status.remove();
+            renderSprites(records);
+        })
+        .catch(function (error) {
+            console.error("Unable to load sprites from PocketBase.", error);
+            $status.attr("role", "alert")
+                .text("Could not load sprites. Check that PocketBase is running and try again.");
+        });
+});
+
 $(function () {
     const $searchResults = $("#search-results");
 
