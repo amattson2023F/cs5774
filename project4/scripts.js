@@ -42,7 +42,7 @@ $(function () {
         $authenticatedContent.prop("hidden", !authenticated);
         $(".detail-form, .add-form, .collection").each(function () {
             const $element = $(this);
-            $element.prop("hidden", !authenticated);
+            $element.prop("hidden", !authenticated || $element.is("[data-phase5-legacy-form]"));
             if (!authenticated) {
                 addAuthGate($element);
             } else {
@@ -90,6 +90,438 @@ $(function () {
                 $status.attr("role", "alert").text(message);
             });
     });
+});
+
+// Phase 5: create a personal user_sprites record from the sprite detail page.
+$(function () {
+    const $detail = $(".sprite-detail");
+    const pb = window.spriteDexPocketBase;
+    if ($detail.length === 0 || !pb || !$detail.is("[data-detail-add-enabled]")) {
+        return;
+    }
+
+    const spriteId = new URLSearchParams(window.location.search).get("sprite");
+    const $legacyForm = $detail.find("[data-phase5-legacy-form]");
+    const $panel = $("<section>", {
+        class: "collection-add-panel",
+        "aria-labelledby": "collection-add-title",
+        hidden: true
+    });
+    $("<h2>", { id: "collection-add-title", text: "Your Collection" }).appendTo($panel);
+    const $status = $("<p>", { class: "collection-add-status", role: "status", "aria-live": "polite" })
+        .appendTo($panel);
+    const $button = $("<button>", {
+        class: "button button-dark",
+        type: "button",
+        text: "Add to My Collection"
+    }).appendTo($panel);
+    $panel.insertBefore($legacyForm);
+
+    function isAuthenticated() {
+        return pb.authStore.isValid && pb.authStore.record;
+    }
+
+    function setStatus(message, isError) {
+        $status.attr("role", isError ? "alert" : "status").text(message);
+    }
+
+    function findExistingRecord() {
+        const userId = pb.authStore.record.id;
+        const filter = 'user = "' + userId + '" && sprite = "' + spriteId + '"';
+        return pb.collection("user_sprites").getList(1, 1, { filter: filter });
+    }
+
+    function refreshAddState() {
+        if (!isAuthenticated() || !spriteId) {
+            $panel.prop("hidden", true);
+            return;
+        }
+
+        $panel.prop("hidden", false);
+        $button.prop("disabled", true);
+        setStatus("Checking your collection…", false);
+        findExistingRecord()
+            .then(function (result) {
+                if (result.items.length > 0) {
+                    $button.prop("hidden", true);
+                    setStatus("This sprite is already in your collection.", false);
+                } else {
+                    $button.prop("hidden", false).prop("disabled", false);
+                    setStatus("Add this sprite to your personal collection.", false);
+                }
+            })
+            .catch(function (error) {
+                console.error("Unable to check the personal sprite collection.", error);
+                $button.prop("hidden", true);
+                setStatus("Could not check your collection. Make sure the user_sprites collection is available.", true);
+            });
+    }
+
+    $button.on("click", function () {
+        if (!isAuthenticated()) {
+            return;
+        }
+        $button.prop("disabled", true);
+        setStatus("Adding sprite…", false);
+        pb.collection("user_sprites").create({
+            user: pb.authStore.record.id,
+            sprite: spriteId,
+            is_mastered: false,
+            notes: ""
+        })
+            .then(function () {
+                $button.prop("hidden", true);
+                setStatus("Added to your collection.", false);
+            })
+            .catch(function (error) {
+                console.error("Unable to add sprite to the personal collection.", error);
+                $button.prop("disabled", false);
+                setStatus("Could not add this sprite. Please try again.", true);
+            });
+    });
+
+    pb.authStore.onChange(refreshAddState);
+    refreshAddState();
+});
+
+// Phase 5: create user_sprites records from the dedicated add page.
+$(function () {
+    const $form = $("#add-to-collection-form");
+    const pb = window.spriteDexPocketBase;
+    if ($form.length === 0 || !pb) {
+        return;
+    }
+
+    const $spriteSelect = $form.find("#sprite");
+    const $status = $form.find(".add-form-status");
+    const $button = $form.find("#add-to-collection-button");
+
+    function isAuthenticated() {
+        return pb.authStore.isValid && pb.authStore.record;
+    }
+
+    function setStatus(message, isError) {
+        $status.attr("role", isError ? "alert" : "status").text(message);
+    }
+
+    function currentSpriteId() {
+        return $spriteSelect.val();
+    }
+
+    function loadSpriteOptions() {
+        pb.collection("sprites").getFullList({ sort: "name" })
+            .then(function (sprites) {
+                $spriteSelect.empty();
+                sprites.forEach(function (sprite) {
+                    $("<option>", { value: sprite.id, text: sprite.name || "Unnamed Sprite" })
+                        .appendTo($spriteSelect);
+                });
+                if (sprites.length === 0) {
+                    $spriteSelect.append($("<option>", {
+                        value: "",
+                        text: "No sprites available",
+                        disabled: true,
+                        selected: true
+                    }));
+                    setStatus("No sprites are available to add.", true);
+                    return;
+                }
+                updatePreview();
+                if (isAuthenticated()) {
+                    checkDuplicate();
+                }
+            })
+            .catch(function (error) {
+                console.error("Unable to load sprites for the add form.", error);
+                setStatus("Could not load sprites. Check that PocketBase is running and try again.", true);
+            });
+    }
+
+    function updatePreview() {
+        const spriteId = currentSpriteId();
+        if (!spriteId) {
+            return;
+        }
+        pb.collection("sprites").getOne(spriteId)
+            .then(function (sprite) {
+                const name = sprite.name || "Unnamed Sprite";
+                const imageUrl = sprite.image ? pb.files.getURL(sprite, sprite.image) : "";
+                $(".sprite-preview .sprite-portrait").attr({ src: imageUrl, alt: name });
+                $(".preview-name").text(name);
+                $(".preview-rarity").text(sprite.rarity || "");
+                $(".preview-season").text(sprite.season || sprite.category || "");
+                $(".preview-description").text(sprite.description || "No description is available for this sprite.");
+            })
+            .catch(function () {
+                setStatus("Could not load the selected sprite preview.", true);
+            });
+    }
+
+    function checkDuplicate() {
+        if (!isAuthenticated()) {
+            return;
+        }
+        $button.prop("disabled", true).prop("hidden", false);
+        setStatus("Checking your collection…", false);
+        const filter = 'user = "' + pb.authStore.record.id + '" && sprite = "' + currentSpriteId() + '"';
+        pb.collection("user_sprites").getList(1, 1, { filter: filter })
+            .then(function (result) {
+                if (result.items.length > 0) {
+                    $button.prop("hidden", true);
+                    setStatus("This sprite is already in your collection.", false);
+                } else {
+                    $button.prop("hidden", false).prop("disabled", false);
+                    setStatus("", false);
+                }
+            })
+            .catch(function (error) {
+                console.error("Unable to check for an existing collection record.", error);
+                $button.prop("disabled", true);
+                setStatus("Could not check your collection. Make sure PocketBase is running and try again.", true);
+            });
+    }
+
+    $spriteSelect.on("change", function () {
+        updatePreview();
+        checkDuplicate();
+    });
+
+    $form.on("submit", function (event) {
+        event.preventDefault();
+        if (!isAuthenticated()) {
+            setStatus("Please log in before adding a sprite.", true);
+            return;
+        }
+        const mastered = $form.find("input[name='status']:checked").val() === "mastered";
+        const notes = $form.find("#notes").val().trim();
+        $button.prop("disabled", true);
+        setStatus("Adding sprite…", false);
+        pb.collection("user_sprites").create({
+            user: pb.authStore.record.id,
+            sprite: currentSpriteId(),
+            is_mastered: mastered,
+            notes: notes
+        })
+            .then(function () {
+                $button.prop("hidden", true);
+                setStatus("Sprite added to your collection.", false);
+            })
+            .catch(function (error) {
+                console.error("Unable to add sprite to the personal collection.", error);
+                $button.prop("disabled", false);
+                setStatus("Could not add this sprite. It may already be in your collection.", true);
+            });
+    });
+
+    pb.authStore.onChange(function () {
+        if (isAuthenticated()) {
+            checkDuplicate();
+        }
+    });
+    loadSpriteOptions();
+});
+
+// Display the authenticated user's read-only status and notes for a sprite.
+$(function () {
+    const $panel = $("[data-personal-status]");
+    const pb = window.spriteDexPocketBase;
+    if ($panel.length === 0 || !pb) {
+        return;
+    }
+
+    const spriteId = new URLSearchParams(window.location.search).get("sprite");
+    const $mastered = $panel.find("[data-personal-mastered]");
+    const $notes = $panel.find("[data-personal-notes]");
+
+    function loadPersonalStatus() {
+        if (!pb.authStore.isValid || !pb.authStore.record || !spriteId) {
+            $panel.prop("hidden", true);
+            return;
+        }
+
+        const filter = 'user = "' + pb.authStore.record.id + '" && sprite = "' + spriteId + '"';
+        pb.collection("user_sprites").getList(1, 1, { filter: filter })
+            .then(function (result) {
+                const record = result.items[0];
+                $panel.prop("hidden", false);
+                if (!record) {
+                    $mastered.text("Not in your collection");
+                    $notes.text("No notes saved.");
+                    return;
+                }
+                $mastered.text(record.is_mastered ? "Mastered" : "Not Mastered");
+                $notes.text(record.notes || "No notes saved.");
+            })
+            .catch(function (error) {
+                console.error("Unable to load the personal sprite status.", error);
+                $panel.prop("hidden", false);
+                $mastered.text("Unavailable");
+                $notes.text("Could not load your notes right now.");
+            });
+    }
+
+    pb.authStore.onChange(loadPersonalStatus);
+    loadPersonalStatus();
+});
+
+// Phase 6: read the authenticated user's personal sprite collection.
+$(function () {
+    const $collection = $("[data-pocketbase-collection-page]");
+    const pb = window.spriteDexPocketBase;
+    if ($collection.length === 0 || !pb) {
+        return;
+    }
+
+    const $grid = $collection.find("[data-pocketbase-collection]");
+    const $filters = $collection.find(".collection-filters");
+    const $status = $("<p>", {
+        class: "collection-status-message",
+        role: "status",
+        "aria-live": "polite"
+    }).insertBefore($grid);
+    let collectionRecords = [];
+
+    function isAuthenticated() {
+        return pb.authStore.isValid && pb.authStore.record;
+    }
+
+    function normalize(value) {
+        return String(value || "").trim().toLowerCase();
+    }
+
+    function getSprite(record) {
+        return record.expand && record.expand.sprite ? record.expand.sprite : null;
+    }
+
+    function render(records) {
+        const query = normalize($filters.find("#collection-search").val());
+        const season = normalize($filters.find("#season").val());
+        const status = normalize($filters.find("#status").val());
+        const variant = normalize($filters.find("#variant").val());
+        const sort = $filters.find("#sort").val();
+        const visible = records.filter(function (entry) {
+            const sprite = entry.sprite;
+            const name = normalize(sprite.name);
+            const spriteSeason = normalize(sprite.season || sprite.category);
+            const spriteVariant = normalize(entry.collection.variant || sprite.variant || "default");
+            const mastered = Boolean(entry.collection.is_mastered);
+            const seasonMatches = season === "all" || (season === "c7s4" && spriteSeason === "chapter 7 season 4");
+            const statusMatches = status === "all"
+                || status === "owned"
+                || (status === "mastered" && mastered)
+                || (status === "in-progress" && !mastered);
+            const variantMatches = variant === "all" || spriteVariant === variant;
+            return (!query || name.includes(query)) && seasonMatches && statusMatches && variantMatches;
+        }).sort(function (left, right) {
+            if (sort === "progress") {
+                return Number(right.collection.is_mastered) - Number(left.collection.is_mastered);
+            }
+            if (sort === "season") {
+                return normalize(left.sprite.season || left.sprite.category)
+                    .localeCompare(normalize(right.sprite.season || right.sprite.category));
+            }
+            return normalize(left.sprite.name).localeCompare(normalize(right.sprite.name));
+        });
+
+        $grid.empty();
+        visible.forEach(function (entry) {
+            const sprite = entry.sprite;
+            const name = sprite.name || "Unnamed Sprite";
+            const seasonText = sprite.season || sprite.category || "";
+            const rarity = sprite.rarity || "";
+            const mastered = Boolean(entry.collection.is_mastered);
+            const progress = mastered ? 100 : 0;
+            const imageUrl = sprite.image ? pb.files.getURL(sprite, sprite.image) : "";
+            const $card = $("<article>", {
+                class: "sprite-card",
+                "data-sprite": sprite.id
+            });
+            const $link = $("<a>", { href: "detail.html?sprite=" + encodeURIComponent(sprite.id) });
+            const $art = $("<div>", { class: "card-art" });
+            const $image = $("<img>", { alt: name });
+            if (imageUrl) {
+                $image.attr("src", imageUrl);
+            }
+            const $copy = $("<div>", { class: "card-copy" });
+            $("<h2>").text(name).appendTo($copy);
+            $("<p>").text(seasonText).appendTo($copy);
+            const $tags = $("<ul>", {
+                class: "tags",
+                "aria-label": "Sprite rarity and collection status"
+            });
+            $("<li>").text(rarity).appendTo($tags);
+            $("<li>").text("Owned").appendTo($tags);
+            $("<li>").addClass("collection-status-tag").text(mastered ? "Mastered" : "In Progress").appendTo($tags);
+            $image.appendTo($art);
+            $art.appendTo($link);
+            $copy.appendTo($link);
+            $tags.appendTo($copy);
+            $link.appendTo($card);
+            const $progress = $("<div>", { class: "mastery-progress" });
+            $("<progress>", {
+                value: progress,
+                max: 100,
+                text: progress + "%",
+                "aria-label": name + " mastery: " + progress + "%"
+            }).appendTo($progress);
+            $("<span>").text(progress + "%").appendTo($progress);
+            $progress.appendTo($card);
+            $card.appendTo($grid);
+        });
+
+        const masteredCount = records.filter(function (entry) {
+            return Boolean(entry.collection.is_mastered);
+        }).length;
+        $collection.find(".collection-summary .collection-stat").eq(0).find("strong").text(records.length + " / " + records.length);
+        $collection.find(".collection-summary .collection-stat").eq(1).find("strong").text(masteredCount + " / " + records.length);
+        $status.text(visible.length === 0 ? "No sprites match your collection filters." : "");
+    }
+
+    function loadCollection() {
+        $grid.empty();
+        if (!isAuthenticated()) {
+            return;
+        }
+        $status.text("Loading your collection…");
+        pb.collection("user_sprites").getFullList({
+            sort: "created",
+            filter: 'user = "' + pb.authStore.record.id + '"',
+            expand: "sprite"
+        })
+            .then(function (records) {
+                return Promise.all(records.map(function (record) {
+                    const sprite = getSprite(record);
+                    return sprite
+                        ? { collection: record, sprite: sprite }
+                        : pb.collection("sprites").getOne(record.sprite).then(function (loadedSprite) {
+                            return { collection: record, sprite: loadedSprite };
+                        });
+                }));
+            })
+            .then(function (records) {
+                collectionRecords = records;
+                if (records.length === 0) {
+                    $status.text("Your collection is empty. Add a sprite from the Browse page.");
+                    render(records);
+                    return;
+                }
+                $status.text("");
+                render(records);
+            })
+            .catch(function (error) {
+                console.error("Unable to load the personal sprite collection.", error);
+                $status.attr("role", "alert").text("Could not load your collection. Check that PocketBase is running and try again.");
+            });
+    }
+
+    $filters.on("submit", function (event) {
+        event.preventDefault();
+        render(collectionRecords);
+    }).on("input change", "input, select", function () {
+        render(collectionRecords);
+    });
+    pb.authStore.onChange(loadCollection);
+    loadCollection();
 });
 
 // Phase 1: load the public sprites collection into the existing browse grid.
@@ -200,9 +632,6 @@ $(function () {
             const imageUrl = record.image
                 ? window.spriteDexPocketBase.files.getURL(record, record.image)
                 : "";
-            const variants = Array.isArray(record.variants)
-                ? record.variants
-                : (record.variants ? String(record.variants).split(",") : []);
 
             $("[data-sprite-name]").text(name);
             $("[data-sprite-name-detail]").text(name);
@@ -210,14 +639,6 @@ $(function () {
             $("[data-sprite-season], [data-sprite-season-detail]").text(season);
             $("[data-sprite-description]").text(description);
             $("[data-sprite-image]").attr({ src: imageUrl, alt: name });
-
-            const $variants = $("[data-sprite-variants]").empty();
-            variants.forEach(function (variant) {
-                $("<li>").text(String(variant).trim()).appendTo($variants);
-            });
-            if (variants.length === 0) {
-                $("<li>").text("No variants listed.").appendTo($variants);
-            }
 
             document.title = name + " — SpriteDex";
             $status.remove();
@@ -368,6 +789,9 @@ $(function () {
 $(function () {
     const $grid = $(".collection-grid");
     const $dashboard = $(".dashboard");
+    if ($grid.is("[data-pocketbase-collection]")) {
+        return;
+    }
     if ($grid.length === 0 && $dashboard.length === 0) {
         return;
     }

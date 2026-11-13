@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/pocketbase@0.26.2/dist/pocketbase.umd.js" defer></script>
     <script src="pocketbase-client.js" defer></script>
     <script src="assets/jquery-3.7.1.min.js" defer></script>
-    <script src="scripts.js?v=phase4" defer></script>
+    <script src="scripts.js?v=phase6" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main">Skip to main content</a>
@@ -32,7 +32,7 @@
             </div>
         </div>
     </header>
-    <main class="container collection" id="main">
+    <main class="container collection" id="main" data-pocketbase-collection-page>
         <div class="section-heading">
             <div>
                 <h1>My Collection</h1>
@@ -102,7 +102,7 @@
             <button class="button button-dark" type="button">Search</button>
         </form>
 
-        <div class="collection-grid">
+        <div class="collection-grid" data-pocketbase-collection>
             <article class="sprite-card" data-sprite="adventure">
                 <a href="detail.html?sprite=adventure">
                     <div class="card-art">

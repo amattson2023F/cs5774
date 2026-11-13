@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/pocketbase@0.26.2/dist/pocketbase.umd.js" defer></script>
     <script src="pocketbase-client.js" defer></script>
     <script src="assets/jquery-3.7.1.min.js" defer></script>
-    <script src="scripts.js?v=phase4" defer></script>
+    <script src="scripts.js?v=phase6-personal" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main">Skip to main content</a>
@@ -33,7 +33,7 @@
         </div>
     </header>
     <main class="container sprite-detail" id="main">
-        <p><a href="index.html#explore">← Back to Sprites</a></p>
+        <p><a href="list.html">← Back to My Collection</a></p>
         <p class="detail-status" role="status" aria-live="polite">Loading sprite…</p>
 
         <!-- The detail content is populated from PocketBase by scripts.js. -->
@@ -58,12 +58,16 @@
                         <dt>Rarity</dt><dd data-sprite-rarity-detail></dd>
                         <dt>Introduced</dt><dd data-sprite-season-detail></dd>
                     </dl>
-                    <h3>Variants</h3>
-                    <ul data-sprite-variants></ul>
                 </section>
             </div>
 
-            <form class="detail-form" aria-labelledby="status-title">
+            <section class="personal-status" data-personal-status aria-labelledby="personal-status-title" hidden>
+                <h2 id="personal-status-title">Your Collection Status</h2>
+                <p><strong>Status:</strong> <span data-personal-mastered></span></p>
+                <p><strong>Notes:</strong> <span data-personal-notes></span></p>
+            </section>
+
+            <form class="detail-form" data-phase5-legacy-form aria-labelledby="status-title">
                 <h2 id="status-title">Your Collection Status</h2>
                 <div class="status-option">
                     <label for="owned">Owned</label>
