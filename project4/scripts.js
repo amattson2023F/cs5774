@@ -1,5 +1,97 @@
 /* Shared behavior for the SpriteDex prototype. */
 
+// Phase 4: keep authentication in PocketBase's auth store and synchronize UI.
+$(function () {
+    const pb = window.spriteDexPocketBase;
+    const $loginForm = $("#login-form");
+    const $loginPanel = $("#login-panel");
+    const $authenticatedContent = $("[data-authenticated-content]");
+
+    function isAuthenticated() {
+        return Boolean(pb && pb.authStore.isValid && pb.authStore.record);
+    }
+
+    function addAuthGate($element) {
+        if ($element.prev(".auth-required-message").length > 0) {
+            return;
+        }
+        $("<p>", { class: "auth-required-message" })
+            .append("Please ")
+            .append($("<a>", { href: "homealt.html", text: "log in" }))
+            .append(" to manage your personal collection.")
+            .insertBefore($element);
+    }
+
+    function updateAuthUI() {
+        const authenticated = isAuthenticated();
+        const $accountActions = $(".account-actions");
+        $accountActions.empty();
+
+        if (authenticated) {
+            $("<button>", { class: "button", type: "button", text: "Log Out" })
+                .attr("data-auth-action", "logout")
+                .appendTo($accountActions);
+        } else {
+            $("<a>", { class: "button", href: "homealt.html", text: "Log In" })
+                .appendTo($accountActions);
+            $("<a>", { class: "button button-dark", href: "add.html", text: "Sign Up" })
+                .appendTo($accountActions);
+        }
+
+        $loginPanel.prop("hidden", authenticated);
+        $authenticatedContent.prop("hidden", !authenticated);
+        $(".detail-form, .add-form, .collection").each(function () {
+            const $element = $(this);
+            $element.prop("hidden", !authenticated);
+            if (!authenticated) {
+                addAuthGate($element);
+            } else {
+                $element.prev(".auth-required-message").remove();
+            }
+        });
+    }
+
+    if (pb) {
+        pb.authStore.onChange(updateAuthUI);
+    }
+    updateAuthUI();
+
+    $(document).on("click", "[data-auth-action='logout']", function () {
+        if (pb) {
+            pb.authStore.clear();
+        }
+    });
+
+    $loginForm.on("submit", function (event) {
+        event.preventDefault();
+        const $status = $("#login-status");
+        const email = $("#login-email").val().trim();
+        const password = $("#login-password").val();
+        if (!email || !password) {
+            $status.attr("role", "alert").text("Enter your email and password.");
+            return;
+        }
+        if (!pb) {
+            $status.attr("role", "alert").text("PocketBase is unavailable. Start the server and try again.");
+            return;
+        }
+
+        $status.attr("role", "status").text("Logging in…");
+        pb.collection("users").authWithPassword(email, password)
+            .then(function () {
+                $status.text("Login successful.");
+                window.location.href = "index.html";
+            })
+            .catch(function (error) {
+                console.error("Unable to log in to PocketBase.", error);
+                const message = error && error.status === 400
+                    ? "The email or password is incorrect."
+                    : "Could not connect to PocketBase. Check that the server is running and try again.";
+                $status.attr("role", "alert").text(message);
+            });
+    });
+});
+
 // Phase 1: load the public sprites collection into the existing browse grid.
 $(function () {
     const $grid = $(".explore .sprite-grid");

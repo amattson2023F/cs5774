@@ -7,16 +7,18 @@
     <title>SpriteDex</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="dashboard.css?v=2">
+    <script src="https://unpkg.com/pocketbase@0.26.2/dist/pocketbase.umd.js" defer></script>
+    <script src="pocketbase-client.js" defer></script>
     <script src="assets/jquery-3.7.1.min.js" defer></script>
-    <script src="scripts.js" defer></script>
+    <script src="scripts.js?v=phase4" defer></script>
 </head>
 <body class="dashboard-page">
     <a class="skip-link" href="#main">Skip to main content</a>
     <header class="site-header">
         <div class="container header-inner">
-            <a class="brand" href="homealt.html" aria-label="SpriteDex home">SpriteDex</a>
+            <a class="brand" href="index.html" aria-label="SpriteDex home">SpriteDex</a>
             <nav class="primary-nav" aria-label="Primary navigation">
-                <a href="homealt.html" aria-current="page">Home</a>
+                <a href="index.html">Home</a>
                 <a href="index.html#explore">Sprites</a>
                 <a href="list.html">My Collection</a>
             </nav>
@@ -30,7 +32,25 @@
             </div>
         </div>
     </header>
-    <main class="container dashboard" id="main">
+    <main class="container auth-shell" id="main">
+        <section class="auth-login-panel" id="login-panel" aria-labelledby="login-title" hidden>
+            <h1 id="login-title">Log In to SpriteDex</h1>
+            <p>Sign in to manage your personal Sprite collection.</p>
+            <form id="login-form" novalidate>
+                <div class="detail-field">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" name="email" autocomplete="email" required>
+                </div>
+                <div class="detail-field">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" name="password" autocomplete="current-password" required>
+                </div>
+                <p id="login-status" role="status" aria-live="polite"></p>
+                <button class="button button-dark" type="submit">Log In</button>
+            </form>
+        </section>
+
+        <div class="dashboard" data-authenticated-content>
         <div class="section-heading">
             <div>
                 <h1>Welcome back!</h1>
@@ -140,6 +160,7 @@
                     </ul>
                 </section>
             </section>
+        </div>
         </div>
     </main>
     <footer class="site-footer">
