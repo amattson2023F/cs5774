@@ -1,4 +1,4 @@
-/* Shared behavior for the SpriteDex prototype. */
+/* Shared PocketBase behavior for SpriteDex. */
 
 // Phase 4: keep authentication in PocketBase's auth store and synchronize UI.
 $(function () {
@@ -333,49 +333,6 @@ $(function () {
     loadSpriteOptions();
 });
 
-// Display the authenticated user's read-only status and notes for a sprite.
-$(function () {
-    const $panel = $("[data-personal-status]");
-    const pb = window.spriteDexPocketBase;
-    if ($panel.length === 0 || !pb) {
-        return;
-    }
-
-    const spriteId = new URLSearchParams(window.location.search).get("sprite");
-    const $mastered = $panel.find("[data-personal-mastered]");
-    const $notes = $panel.find("[data-personal-notes]");
-
-    function loadPersonalStatus() {
-        if (!pb.authStore.isValid || !pb.authStore.record || !spriteId) {
-            $panel.prop("hidden", true);
-            return;
-        }
-
-        const filter = 'user = "' + pb.authStore.record.id + '" && sprite = "' + spriteId + '"';
-        pb.collection("user_sprites").getList(1, 1, { filter: filter })
-            .then(function (result) {
-                const record = result.items[0];
-                $panel.prop("hidden", false);
-                if (!record) {
-                    $mastered.text("Not in your collection");
-                    $notes.text("No notes saved.");
-                    return;
-                }
-                $mastered.text(record.is_mastered ? "Mastered" : "Not Mastered");
-                $notes.text(record.notes || "No notes saved.");
-            })
-            .catch(function (error) {
-                console.error("Unable to load the personal sprite status.", error);
-                $panel.prop("hidden", false);
-                $mastered.text("Unavailable");
-                $notes.text("Could not load your notes right now.");
-            });
-    }
-
-    pb.authStore.onChange(loadPersonalStatus);
-    loadPersonalStatus();
-});
-
 // Phase 7: allow mastery and notes to be edited on the detail page.
 $(function () {
     const $form = $("[data-detail-edit-form]");
@@ -615,24 +572,20 @@ $(function () {
         const query = normalize($filters.find("#collection-search").val());
         const season = normalize($filters.find("#season").val());
         const status = normalize($filters.find("#status").val());
-        const variant = normalize($filters.find("#variant").val());
         const sort = $filters.find("#sort").val();
         const visible = records.filter(function (entry) {
             const sprite = entry.sprite;
             const name = normalize(sprite.name);
             const spriteSeason = normalize(sprite.season || sprite.category);
-            const spriteVariant = normalize(entry.collection.variant || sprite.variant || "default");
             const mastered = Boolean(entry.collection.is_mastered);
             const seasonMatches = season === "all"
                 || (season === "c7mini" && spriteSeason === "chapter 7 mini season");
             const statusMatches = status === "all"
-                || status === "owned"
                 || (status === "mastered" && mastered)
-                || (status === "in-progress" && !mastered);
-            const variantMatches = variant === "all" || spriteVariant === variant;
-            return (!query || name.includes(query)) && seasonMatches && statusMatches && variantMatches;
+                || (status === "not-mastered" && !mastered);
+            return (!query || name.includes(query)) && seasonMatches && statusMatches;
         }).sort(function (left, right) {
-            if (sort === "progress") {
+            if (sort === "mastered") {
                 return Number(right.collection.is_mastered) - Number(left.collection.is_mastered);
             }
             if (sort === "season") {
@@ -649,7 +602,6 @@ $(function () {
             const seasonText = sprite.season || sprite.category || "";
             const rarity = sprite.rarity || "";
             const mastered = Boolean(entry.collection.is_mastered);
-            const progress = mastered ? 100 : 0;
             const imageUrl = sprite.image ? pb.files.getURL(sprite, sprite.image) : "";
             const $card = $("<article>", {
                 class: "sprite-card",
@@ -670,7 +622,7 @@ $(function () {
             });
             $("<li>").text(rarity).appendTo($tags);
             $("<li>").text("Owned").appendTo($tags);
-            $("<li>").addClass("collection-status-tag").text(mastered ? "Mastered" : "In Progress").appendTo($tags);
+            $("<li>").addClass("collection-status-tag").text(mastered ? "Mastered" : "Not Mastered").appendTo($tags);
             $image.appendTo($art);
             $art.appendTo($link);
             $copy.appendTo($link);
@@ -769,7 +721,7 @@ $(function () {
             .then(function (updatedRecord) {
                 entry.collection = updatedRecord;
                 const $card = $edit.closest(".sprite-card");
-                $card.find(".collection-status-tag").text(mastered ? "Mastered" : "In Progress");
+                $card.find(".collection-status-tag").text(mastered ? "Mastered" : "Not Mastered");
                 $button.prop("disabled", false);
                 const masteredCount = collectionRecords.filter(function (item) {
                     return Boolean(item.collection.is_mastered);
@@ -929,264 +881,57 @@ $(function () {
 
 $(function () {
     const $searchResults = $("#search-results");
-
-    // Other pages load this shared file but do not have search results to render.
-    if ($searchResults.length === 0) {
+    const pb = window.spriteDexPocketBase;
+    if ($searchResults.length === 0 || !pb) {
         return;
     }
 
-    const query = new URLSearchParams(window.location.search).get("q") || "";
+    const query = (new URLSearchParams(window.location.search).get("q") || "").trim();
     $("#site-search-q").val(query);
-
-    // Simulated search requires the exact, case-sensitive phrase.
-    if (query === "adventure sprite") {
-        $("#search-summary").text('1 result for “adventure sprite”.');
-        $searchResults.prop("hidden", false);
-        $("#search-empty").prop("hidden", true);
-    } else {
-        // Use text(), not HTML, so submitted text is never interpreted as markup.
-        $("#search-summary").text(query ? 'No results for “' + query + '”.' : "No search phrase entered.");
-        $searchResults.prop("hidden", true);
+    if (!query) {
+        $("#search-summary").text("Enter a search phrase to find a Sprite.");
         $("#search-empty").prop("hidden", false);
-    }
-});
-
-// Initialize separately so the search page's early return does not skip this interaction.
-$(function () {
-    const $spriteSelect = $(".add-form #sprite");
-    if ($spriteSelect.length === 0) {
         return;
     }
 
-    // Prototype preview data for all six Sprites and their named variants.
-    const sprites = {
-        adventure: {
-            name: "Adventure Sprite",
-            rarity: "Rare",
-            description: "Upgrades a random item in the player's inventory with each Level Up!",
-            variants: ["Gold", "Cheat Master", "Loot Hacker", "Bounty Hunter"]
-        },
-        tails: {
-            name: "Tails Sprite",
-            rarity: "Epic",
-            description: "(Active - Jump In Air) Hover with the help of Tails! Hover speed increased with each Level Up!",
-            variants: ["Gold", "Cheat Master", "Loot Hacker", "Bounty Hunter"]
-        },
-        jonesy: {
-            name: "Jonesy Sprite",
-            rarity: "Rare",
-            description: "Recover some health or shields after being damaged after a short duration. Increase amount healed with each Level Up!",
-            variants: ["Gold", "Cheat Master", "Loot Hacker", "Bounty Hunter"]
-        },
-        bush: {
-            name: "Bush Sprite",
-            rarity: "Rare",
-            description: "Grants a bush on you after a duration, gain a bush on elimination at max level. Time between bush activating decreases with each Level Up!",
-            variants: ["Gold", "Cheat Master", "Loot Hacker", "Bounty Hunter"]
-        },
-        shadow: {
-            name: "Shadow Sprite",
-            rarity: "Epic",
-            description: "Automatically reload unequipped weapons over time. Reloads equipped weapon at max level. Automatic reload gets faster with each Level Up!",
-            variants: ["Gold", "Cheat Master", "Loot Hacker", "Bounty Hunter"]
-        },
-        sonic: {
-            name: "Sonic Sprite",
-            rarity: "Epic",
-            description: "Gotta Go Fast! Sprint faster with each Level Up!",
-            variants: ["Gold", "Cheat Master", "Loot Hacker", "Bounty Hunter"]
-        }
-    };
-
-    // An initially empty live region announces each newly generated message.
-    $("<div>", { class: "preview-status", role: "status", "aria-atomic": "true" })
-        .appendTo($spriteSelect.closest(".add-form").siblings(".sprite-preview"));
-
-    function updatePreview(announce) {
-        const spriteId = $(this).val();
-        if (!Object.prototype.hasOwnProperty.call(sprites, spriteId)) {
-            return;
-        }
-        const sprite = sprites[spriteId];
-
-        // Traverse from the changed select to its form, then to the sibling preview.
-        const $form = $(this).closest(".add-form");
-        const $preview = $form.siblings(".sprite-preview");
-        $preview.find(".sprite-portrait").attr({
-            src: "",
-            alt: sprite.name
+    $("#search-summary").text("Searching SpriteDex…");
+    pb.collection("sprites").getFullList({ sort: "name" })
+        .then(function (sprites) {
+            const needle = query.toLowerCase();
+            const matches = sprites.filter(function (sprite) {
+                return [sprite.name, sprite.description, sprite.rarity, sprite.season, sprite.category]
+                    .some(function (value) {
+                        return String(value || "").toLowerCase().includes(needle);
+                    });
+            });
+            $searchResults.empty();
+            matches.forEach(function (sprite) {
+                const imageUrl = sprite.image ? pb.files.getURL(sprite, sprite.image) : "";
+                const $card = $("<article>", { class: "sprite-card" });
+                const $link = $("<a>", { href: "detail.html?sprite=" + encodeURIComponent(sprite.id) });
+                const $art = $("<div>", { class: "card-art" });
+                if (imageUrl) {
+                    $("<img>", { src: imageUrl, alt: sprite.name || "Sprite" }).appendTo($art);
+                }
+                $("<div>", { class: "card-copy" })
+                    .append($("<h2>").text(sprite.name || "Unnamed Sprite"))
+                    .append($("<p>").text(sprite.season || sprite.category || ""))
+                    .append($("<p>").text(sprite.description || ""))
+                    .append($("<ul>", { class: "tags", "aria-label": "Sprite attributes" })
+                        .append($("<li>").text(sprite.rarity || "")))
+                    .appendTo($link);
+                $art.appendTo($link);
+                $link.appendTo($card);
+                $card.appendTo($searchResults);
+            });
+            $("#search-summary").text(matches.length + " result" + (matches.length === 1 ? "" : "s") + " found.");
+            $searchResults.prop("hidden", matches.length === 0);
+            $("#search-empty").prop("hidden", matches.length > 0);
+        })
+        .catch(function (error) {
+            console.error("Unable to search sprites from PocketBase.", error);
+            $("#search-summary").attr("role", "alert").text("Could not search sprites. Check that PocketBase is running and try again.");
+            $searchResults.prop("hidden", true);
+            $("#search-empty").prop("hidden", false);
         });
-        $preview.find(".preview-name").text(sprite.name);
-        $preview.find(".preview-rarity").text(sprite.rarity);
-        $preview.find(".preview-season").text("Chapter 7 Season 4");
-        $preview.find(".preview-description").text(sprite.description);
-
-        const $variants = $preview.find(".preview-variants").empty();
-        const previewVariants = sprite.variants.length ? sprite.variants : ["Default"];
-        previewVariants.forEach(function (variant) {
-            $("<li>").text(variant).appendTo($variants);
-        });
-
-        // Keep the form's variant choices consistent with the selected Sprite.
-        const $variantSelect = $form.find("#variant");
-        const previousVariant = $variantSelect.val();
-        $variantSelect.empty();
-        ["Default"].concat(sprite.variants).forEach(function (variant) {
-            const value = variant.toLowerCase().replace(/ /g, "-");
-            $("<option>", { value: value, text: variant }).appendTo($variantSelect);
-        });
-        $variantSelect.val(announce ? "default" : previousVariant);
-        if ($variantSelect.val() === null) {
-            $variantSelect.val("default");
-        }
-
-        if (announce) {
-            // Replace the last message with a new element to avoid a growing log.
-            const $status = $preview.find(".preview-status").empty();
-            $("<p>", { class: "preview-message" })
-                .text("Preview updated for " + sprite.name + ".")
-                .appendTo($status);
-        }
-    }
-
-    $spriteSelect.on("change", function () {
-        updatePreview.call(this, true);
-    });
-
-    // Respect a selection restored by the browser on page load.
-    $spriteSelect.each(function () {
-        updatePreview.call(this, false);
-    });
-});
-
-$(function () {
-    const $grid = $(".collection-grid");
-    const $dashboard = $(".dashboard");
-    if ($dashboard.is("[data-pocketbase-dashboard]")) {
-        return;
-    }
-    if ($grid.is("[data-pocketbase-collection]")) {
-        return;
-    }
-    if ($grid.length === 0 && $dashboard.length === 0) {
-        return;
-    }
-
-    // Both pages share progress in this browser; no server or account is required.
-    const storageKey = "spritedex.collection.v1";
-    const initialProgress = { adventure: 100, tails: 100, bush: 100, jonesy: 60, shadow: 50, sonic: 40 };
-    let collection = {};
-    let storageAvailable = true;
-
-    function loadCollection() {
-        let saved = {};
-        try {
-            saved = storageAvailable ? JSON.parse(window.localStorage.getItem(storageKey)) || {} : collection;
-        } catch (error) {
-            // Keep the current page usable when storage is unavailable or invalid.
-            saved = collection;
-        }
-        Object.keys(initialProgress).forEach(function (id) {
-            const entry = saved[id];
-            const valid = entry && Number.isFinite(entry.progress) && entry.progress >= 0 && entry.progress <= 100
-                && Number.isFinite(entry.previousProgress) && entry.previousProgress >= 0 && entry.previousProgress < 100;
-            collection[id] = valid ? { progress: entry.progress, previousProgress: entry.previousProgress }
-                : { progress: initialProgress[id], previousProgress: initialProgress[id] === 100 ? 0 : initialProgress[id] };
-        });
-    }
-
-    function renderCollection() {
-        const total = Object.keys(collection).length;
-        const masteredCount = Object.values(collection).filter(function (entry) {
-            return entry.progress === 100;
-        }).length;
-        $grid.find(".sprite-card").each(function () {
-            const $card = $(this);
-            const entry = collection[$card.attr("data-sprite")];
-            if (!entry) {
-                return;
-            }
-            const progress = entry.progress;
-            $card.find(".collection-mastery-checkbox").prop("checked", progress === 100);
-            $card.find(".mastery-progress progress").val(progress).text(progress + "%")
-                .attr("aria-label", $card.find("h2").text() + " mastery: " + progress + "%");
-            $card.find(".mastery-progress span").text(progress + "%");
-            $card.find(".collection-status-tag").text(progress === 100 ? "Mastered" : "In Progress");
-        });
-        $grid.closest(".collection").find(".mastered-count").text(masteredCount + " / " + total);
-        $dashboard.find(".dashboard-mastered-count").text(masteredCount);
-        $dashboard.find(".dashboard-mastered-label").text("Mastered (" + masteredCount + ")");
-        $dashboard.find(".status-owned").css("flex-grow", total - masteredCount);
-        $dashboard.find(".status-mastered").css("flex-grow", masteredCount);
-        $dashboard.find(".status-bar").attr("aria-label", total + " Sprites: " + (total - masteredCount)
-            + " owned but not mastered, " + masteredCount + " mastered, and 0 not owned.");
-    }
-
-    function refreshCollection() {
-        loadCollection();
-        renderCollection();
-    }
-
-    refreshCollection();
-    // Refresh after Back/Forward navigation and changes made in another open tab.
-    $(window).on("pageshow", refreshCollection).on("storage", function (event) {
-        if (event.originalEvent.key === storageKey || event.originalEvent.key === null) {
-            refreshCollection();
-        }
-    });
-    if ($grid.length === 0) {
-        return;
-    }
-
-    const $activity = $("<section>", {
-        class: "collection-activity",
-        "aria-labelledby": "collection-activity-title"
-    }).insertAfter($grid);
-    $("<h2>", { id: "collection-activity-title", text: "Collection Activity" }).appendTo($activity);
-    const $emptyActivity = $("<p>")
-        .text("Check or uncheck Mastered to update a Sprite and your dashboard.")
-        .appendTo($activity);
-    const $activityLog = $("<ul>", {
-        class: "collection-activity-log",
-        role: "log",
-        "aria-labelledby": "collection-activity-title",
-        "aria-relevant": "additions"
-    }).appendTo($activity);
-
-    // One delegated click handler also handles cards added to the grid later.
-    $grid.on("click", ".collection-mastery-checkbox", function () {
-        const $checkbox = $(this);
-        const mastered = this.checked;
-        const $card = $checkbox.closest(".sprite-card");
-        const spriteName = $card.find("h2").text();
-        // Read the latest saved values before updating this Sprite.
-        loadCollection();
-        const entry = collection[$card.attr("data-sprite")];
-        if (!entry) {
-            return;
-        }
-
-        // Remember partial progress so unchecking can undo marking a Sprite mastered.
-        if (mastered) {
-            if (entry.progress < 100) {
-                entry.previousProgress = entry.progress;
-            }
-        }
-        const progress = mastered ? 100 : entry.previousProgress;
-        entry.progress = progress;
-        try {
-            window.localStorage.setItem(storageKey, JSON.stringify(collection));
-        } catch (error) {
-            storageAvailable = false;
-            $("<li>").text("Your browser could not save this change. It will only apply on this page.")
-                .appendTo($activityLog);
-        }
-        renderCollection();
-
-        $emptyActivity.prop("hidden", true);
-        const message = mastered ? "You mastered " + spriteName + "."
-            : "You marked " + spriteName + " as in progress.";
-        $("<li>").text(message + " Mastery is now " + progress + "%.")
-            .appendTo($activityLog);
-    });
 });
