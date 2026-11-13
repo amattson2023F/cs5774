@@ -10,15 +10,15 @@
     <script src="https://unpkg.com/pocketbase@0.26.2/dist/pocketbase.umd.js" defer></script>
     <script src="pocketbase-client.js" defer></script>
     <script src="assets/jquery-3.7.1.min.js" defer></script>
-    <script src="scripts.js?v=phase4" defer></script>
+    <script src="scripts.js?v=dashboard" defer></script>
 </head>
 <body class="dashboard-page">
     <a class="skip-link" href="#main">Skip to main content</a>
     <header class="site-header">
         <div class="container header-inner">
-            <a class="brand" href="index.html" aria-label="SpriteDex home">SpriteDex</a>
+      <a class="brand" href="homealt.html" aria-label="SpriteDex home">SpriteDex</a>
             <nav class="primary-nav" aria-label="Primary navigation">
-                <a href="index.html">Home</a>
+          <a href="homealt.html">Home</a>
                 <a href="list.html">My Collection</a>
             </nav>
             <form class="site-search" action="search.html" method="get" role="search" aria-label="Search SpriteDex">
@@ -49,7 +49,7 @@
             </form>
         </section>
 
-        <div class="dashboard" data-authenticated-content>
+        <div class="dashboard" data-authenticated-content data-pocketbase-dashboard>
         <div class="section-heading">
             <div>
                 <h1>Welcome back!</h1>
@@ -62,8 +62,8 @@
         <div class="dashboard-summary">
             <section class="dashboard-panel" aria-labelledby="progress-title">
                 <h2 id="progress-title">Collection Progress</h2>
-                <p class="collection-total"><strong class="stat-value">100%</strong> <span>6 owned out of 6 total Sprites</span></p>
-                <progress value="6" max="6" aria-label="Collection owned: 6 of 6 Sprites">6 of 6</progress>
+                <p class="collection-total"><strong class="stat-value">0 / 0</strong> <span>Sprites owned</span></p>
+                <progress value="0" max="0" aria-label="Collection owned: 0 of 0 Sprites">0 of 0</progress>
             </section>
             <section class="dashboard-panel metric-panel" aria-labelledby="total-title">
                 <span class="metric-icon" aria-hidden="true">◇</span>
@@ -101,7 +101,7 @@
                         <!-- jonesy.webp: https://fortnite.gg/ -->
                         <img src="assets/jonesy.webp" alt="Jonesy Sprite" width="60" height="53">
                         <div>
-                            <p>You updated <a href="detail.html?sprite=jonesy">Jonesy Sprite</a> to 60% progress.</p>
+                            <p>You updated <a href="detail.html?sprite=jonesy">Jonesy Sprite</a> in your collection.</p>
                             <p class="activity-date">1 day ago</p>
                         </div>
                     </li>
@@ -135,14 +135,9 @@
                     <div class="chart-axis" aria-hidden="true"><span>6</span><span>3</span><span>0</span></div>
                     <ul class="chart-columns" aria-label="Owned and not owned Sprites by season">
                         <li>
-                            <span class="visually-hidden">Chapter 7 Season 3: 0 owned, 0 not owned.</span>
+                            <span class="visually-hidden">Chapter 7 Mini Season: 0 owned, 0 not owned.</span>
                             <div class="season-column" aria-hidden="true"><span class="bar-owned units-0"></span><span class="bar-unowned units-0"></span></div>
-                            <span class="season-label" aria-hidden="true">C7 S3</span>
-                        </li>
-                        <li>
-                            <span class="visually-hidden">Chapter 7 Season 4: 6 owned, 0 not owned.</span>
-                            <div class="season-column" aria-hidden="true"><span class="bar-owned units-6"></span><span class="bar-unowned units-0"></span></div>
-                            <span class="season-label" aria-hidden="true">C7 S4</span>
+                            <span class="season-label" aria-hidden="true">Chapter 7 Mini Season</span>
                         </li>
                     </ul>
                 </div>

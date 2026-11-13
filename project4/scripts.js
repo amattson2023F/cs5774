@@ -24,6 +24,15 @@ $(function () {
 
     function updateAuthUI() {
         const authenticated = isAuthenticated();
+        if (authenticated && $("body").hasClass("public-home")) {
+            window.location.href = "homealt.html";
+            return;
+        }
+        const $detailBackLink = $(".detail-back-link");
+        if ($detailBackLink.length) {
+            $detailBackLink.attr("href", authenticated ? "list.html" : "index.html")
+                .text(authenticated ? "← Back to My Collection" : "← Back to Sprites");
+        }
         const $accountActions = $(".account-actions");
         $accountActions.empty();
 
@@ -34,7 +43,7 @@ $(function () {
         } else {
             $("<a>", { class: "button", href: "homealt.html", text: "Log In" })
                 .appendTo($accountActions);
-            $("<a>", { class: "button button-dark", href: "add.html", text: "Sign Up" })
+            $("<a>", { class: "button button-dark", href: "homealt.html", text: "Sign Up" })
                 .appendTo($accountActions);
         }
 
@@ -61,6 +70,7 @@ $(function () {
     $(document).on("click", "[data-auth-action='logout']", function () {
         if (pb) {
             pb.authStore.clear();
+            window.location.href = "index.html";
         }
     });
 
@@ -416,6 +426,11 @@ $(function () {
                     type: "submit",
                     text: "Save Changes"
                 }).appendTo($form);
+                const $deleteButton = $("<button>", {
+                    class: "button button-delete",
+                    type: "button",
+                    text: "Remove from My Collection"
+                }).appendTo($form);
                 $form.prop("hidden", false);
 
                 $form.off("submit.detailEdit").on("submit.detailEdit", function (event) {
@@ -441,6 +456,26 @@ $(function () {
                             $saveButton.prop("disabled", false);
                         });
                 });
+
+                $deleteButton.on("click", function () {
+                    if (!window.confirm("Remove this sprite from your collection?")) {
+                        return;
+                    }
+                    const $saveButton = $form.find("button[type='submit']");
+                    $deleteButton.prop("disabled", true);
+                    $saveButton.prop("disabled", true);
+                    $saveStatus.attr("role", "status").text("Removing…");
+                    pb.collection("user_sprites").delete(record.id)
+                        .then(function () {
+                            window.location.href = "list.html";
+                        })
+                        .catch(function (error) {
+                            console.error("Unable to remove the personal sprite record.", error);
+                            $saveStatus.attr("role", "alert").text("Could not remove this sprite. Please try again.");
+                            $deleteButton.prop("disabled", false);
+                            $saveButton.prop("disabled", false);
+                        });
+                });
             })
             .catch(function (error) {
                 console.error("Unable to load the detail editor.", error);
@@ -449,6 +484,101 @@ $(function () {
 
     pb.authStore.onChange(loadEditor);
     loadEditor();
+});
+
+// Keep the logged-in dashboard synchronized with PocketBase.
+$(function () {
+    const $dashboard = $("[data-pocketbase-dashboard]");
+    const pb = window.spriteDexPocketBase;
+    if ($dashboard.length === 0 || !pb) {
+        return;
+    }
+
+    function loadDashboard() {
+        if (!pb.authStore.isValid || !pb.authStore.record) {
+            return;
+        }
+
+        Promise.all([
+            pb.collection("sprites").getList(1, 1),
+            pb.collection("user_sprites").getFullList({
+                sort: "-created",
+                filter: 'user = "' + pb.authStore.record.id + '"',
+                expand: "sprite"
+            })
+        ])
+            .then(function (results) {
+                const total = results[0].totalItems;
+                const records = results[1];
+                const owned = records.length;
+                const mastered = records.filter(function (record) {
+                    return Boolean(record.is_mastered);
+                }).length;
+                const notMastered = owned - mastered;
+                const notOwned = Math.max(total - owned, 0);
+                const percentage = total ? Math.round((owned / total) * 100) : 0;
+
+                $dashboard.find(".collection-total .stat-value").text(percentage + "%");
+                $dashboard.find(".collection-total span").text(owned + " owned out of " + total + " total Sprites");
+                $dashboard.find(".collection-total progress")
+                    .attr({ max: total, value: owned, "aria-label": "Collection owned: " + owned + " of " + total + " Sprites" })
+                    .text(owned + " of " + total);
+                $dashboard.find(".metric-panel .stat-value").eq(0).text(total);
+                $dashboard.find(".metric-panel .stat-value").eq(1).text(owned);
+                $dashboard.find(".dashboard-mastered-count").text(mastered);
+                $dashboard.find(".dashboard-mastered-label").text("Mastered (" + mastered + ")");
+                $dashboard.find(".status-owned").css("flex-grow", notMastered);
+                $dashboard.find(".status-mastered").css("flex-grow", mastered);
+                $dashboard.find(".status-bar").attr("aria-label", total + " Sprites: "
+                    + notMastered + " owned but not mastered, " + mastered + " mastered, and " + notOwned + " not owned.");
+                $dashboard.find(".status-legend li").eq(0).text("Owned (" + owned + ")");
+                $dashboard.find(".status-legend li").eq(1).text("Not owned (" + notOwned + ")");
+                $dashboard.find(".status-legend li").eq(2).find(".dashboard-mastered-label").text("Mastered (" + mastered + ")");
+
+                const $activity = $dashboard.find(".activity-list").empty();
+                if (records.length === 0) {
+                    $("<li>").text("No sprites have been added to your collection yet.").appendTo($activity);
+                } else {
+                    records.slice(0, 5).forEach(function (record) {
+                        const sprite = record.expand && record.expand.sprite;
+                        if (!sprite) {
+                            return;
+                        }
+                        const name = sprite.name || "Unnamed Sprite";
+                        const imageUrl = sprite.image ? pb.files.getURL(sprite, sprite.image) : "";
+                        const $item = $("<li>");
+                        if (imageUrl) {
+                            $("<img>", { src: imageUrl, alt: name, width: 60, height: 53 }).appendTo($item);
+                        }
+                        const $copy = $("<div>").appendTo($item);
+                        $("<p>").append("You added the ")
+                            .append($("<a>", { href: "detail.html?sprite=" + encodeURIComponent(sprite.id), text: name }))
+                            .append(" to your collection.")
+                            .appendTo($copy);
+                        $("<p>", {
+                            class: "activity-date",
+                            text: new Date(record.created).toLocaleDateString()
+                        }).appendTo($copy);
+                        $item.appendTo($activity);
+                    });
+                }
+
+                const $chart = $dashboard.find(".chart-columns").empty();
+                const $chartItem = $("<li>");
+                $("<span>", {
+                    class: "visually-hidden",
+                    text: "Chapter 7 Mini Season: " + owned + " owned, " + notOwned + " not owned."
+                }).appendTo($chartItem);
+                $("<span>", { class: "season-label", text: "C7 Mini" }).appendTo($chartItem);
+                $chartItem.appendTo($chart);
+            })
+            .catch(function (error) {
+                console.error("Unable to load the dashboard data.", error);
+            });
+    }
+
+    pb.authStore.onChange(loadDashboard);
+    loadDashboard();
 });
 
 // Phase 6: read the authenticated user's personal sprite collection.
@@ -467,6 +597,7 @@ $(function () {
         "aria-live": "polite"
     }).insertBefore($grid);
     let collectionRecords = [];
+    let totalSpriteCount = 0;
 
     function isAuthenticated() {
         return pb.authStore.isValid && pb.authStore.record;
@@ -492,7 +623,8 @@ $(function () {
             const spriteSeason = normalize(sprite.season || sprite.category);
             const spriteVariant = normalize(entry.collection.variant || sprite.variant || "default");
             const mastered = Boolean(entry.collection.is_mastered);
-            const seasonMatches = season === "all" || (season === "c7s4" && spriteSeason === "chapter 7 season 4");
+            const seasonMatches = season === "all"
+                || (season === "c7mini" && spriteSeason === "chapter 7 mini season");
             const statusMatches = status === "all"
                 || status === "owned"
                 || (status === "mastered" && mastered)
@@ -562,8 +694,10 @@ $(function () {
         const masteredCount = records.filter(function (entry) {
             return Boolean(entry.collection.is_mastered);
         }).length;
-        $collection.find(".collection-summary .collection-stat").eq(0).find("strong").text(records.length + " / " + records.length);
-        $collection.find(".collection-summary .collection-stat").eq(1).find("strong").text(masteredCount + " / " + records.length);
+        $collection.find(".collection-summary .collection-stat").eq(0).find("strong")
+            .text(records.length + " / " + totalSpriteCount);
+        $collection.find(".collection-summary .collection-stat").eq(1).find("strong")
+            .text(masteredCount + " / " + records.length);
         $status.text(records.length === 0
             ? "Your collection is empty. Add a sprite from the Browse page."
             : (visible.length === 0 ? "No sprites match your collection filters." : ""));
@@ -575,12 +709,17 @@ $(function () {
             return;
         }
         $status.text("Loading your collection…");
-        pb.collection("user_sprites").getFullList({
-            sort: "created",
-            filter: 'user = "' + pb.authStore.record.id + '"',
-            expand: "sprite"
-        })
-            .then(function (records) {
+        Promise.all([
+            pb.collection("sprites").getList(1, 1),
+            pb.collection("user_sprites").getFullList({
+                sort: "created",
+                filter: 'user = "' + pb.authStore.record.id + '"',
+                expand: "sprite"
+            })
+        ])
+            .then(function (results) {
+                totalSpriteCount = results[0].totalItems;
+                const records = results[1];
                 return Promise.all(records.map(function (record) {
                     const sprite = getSprite(record);
                     return sprite
@@ -913,6 +1052,9 @@ $(function () {
 $(function () {
     const $grid = $(".collection-grid");
     const $dashboard = $(".dashboard");
+    if ($dashboard.is("[data-pocketbase-dashboard]")) {
+        return;
+    }
     if ($grid.is("[data-pocketbase-collection]")) {
         return;
     }
