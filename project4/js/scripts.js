@@ -812,6 +812,16 @@ $(function () {
     }
 
     function renderSprites(records) {
+        const heroRecord = records.find(function (record) {
+            return String(record.name || "").toLowerCase() === "halfpeel'd";
+        });
+        const $hero = $("[data-pocketbase-hero]");
+        if (heroRecord && heroRecord.image && $hero.length) {
+            $hero.attr({
+                src: getImageUrl(heroRecord),
+                alt: heroRecord.name
+            });
+        }
         records.forEach(function (record) {
             const name = escapeText(record.name || "Unnamed Sprite");
             const description = escapeText(record.season || record.category || "");
@@ -1003,7 +1013,7 @@ $(function () {
         const $form = $(this).closest(".add-form");
         const $preview = $form.siblings(".sprite-preview");
         $preview.find(".sprite-portrait").attr({
-            src: "assets/" + spriteId + ".webp",
+            src: "",
             alt: sprite.name
         });
         $preview.find(".preview-name").text(sprite.name);
