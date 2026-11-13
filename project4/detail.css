@@ -151,3 +151,28 @@
     color: #9b2525;
     border-color: #9b2525;
 }
+.detail-form .collection-mastery-toggle {
+    margin: 20px 0;
+}
+
+.detail-form .collection-notes-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 20px 0;
+}
+
+.detail-form .collection-notes-field textarea {
+    width: 100%;
+    min-height: 140px;
+    padding: 12px;
+    border: 1px solid #8a969f;
+    font: inherit;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.detail-form .detail-save-status {
+    min-height: 24px;
+    margin: 12px 0;
+}

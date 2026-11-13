@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/pocketbase@0.26.2/dist/pocketbase.umd.js" defer></script>
     <script src="pocketbase-client.js" defer></script>
     <script src="assets/jquery-3.7.1.min.js" defer></script>
-    <script src="scripts.js?v=phase6-personal" defer></script>
+    <script src="scripts.js?v=phase7" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main">Skip to main content</a>
@@ -19,7 +19,6 @@
             <a class="brand" href="homealt.html" aria-label="SpriteDex home">SpriteDex</a>
             <nav class="primary-nav" aria-label="Primary navigation">
                 <a href="homealt.html">Home</a>
-                <a href="index.html#explore">Sprites</a>
                 <a href="list.html">My Collection</a>
             </nav>
             <form class="site-search" action="search.html" method="get" role="search" aria-label="Search SpriteDex">
@@ -61,13 +60,7 @@
                 </section>
             </div>
 
-            <section class="personal-status" data-personal-status aria-labelledby="personal-status-title" hidden>
-                <h2 id="personal-status-title">Your Collection Status</h2>
-                <p><strong>Status:</strong> <span data-personal-mastered></span></p>
-                <p><strong>Notes:</strong> <span data-personal-notes></span></p>
-            </section>
-
-            <form class="detail-form" data-phase5-legacy-form aria-labelledby="status-title">
+            <form class="detail-form" data-phase5-legacy-form data-detail-edit-form aria-labelledby="status-title">
                 <h2 id="status-title">Your Collection Status</h2>
                 <div class="status-option">
                     <label for="owned">Owned</label>

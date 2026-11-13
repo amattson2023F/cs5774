@@ -42,7 +42,9 @@ $(function () {
         $authenticatedContent.prop("hidden", !authenticated);
         $(".detail-form, .add-form, .collection").each(function () {
             const $element = $(this);
-            $element.prop("hidden", !authenticated || $element.is("[data-phase5-legacy-form]"));
+            $element.prop("hidden", !authenticated
+                || $element.is("[data-phase5-legacy-form]")
+                || $element.is("[data-detail-edit-form]"));
             if (!authenticated) {
                 addAuthGate($element);
             } else {
@@ -364,6 +366,91 @@ $(function () {
     loadPersonalStatus();
 });
 
+// Phase 7: allow mastery and notes to be edited on the detail page.
+$(function () {
+    const $form = $("[data-detail-edit-form]");
+    const pb = window.spriteDexPocketBase;
+    if ($form.length === 0 || !pb) {
+        return;
+    }
+
+    const spriteId = new URLSearchParams(window.location.search).get("sprite");
+
+    function loadEditor() {
+        $form.prop("hidden", true).empty();
+        if (!pb.authStore.isValid || !pb.authStore.record || !spriteId) {
+            return;
+        }
+
+        const filter = 'user = "' + pb.authStore.record.id + '" && sprite = "' + spriteId + '"';
+        pb.collection("user_sprites").getList(1, 1, { filter: filter })
+            .then(function (result) {
+                const record = result.items[0];
+                if (!record) {
+                    return;
+                }
+
+                $form.attr("aria-labelledby", "detail-edit-title");
+                $("<h2>", { id: "detail-edit-title", text: "Edit Collection Details" }).appendTo($form);
+                const $masteryLabel = $("<label>", { class: "collection-mastery-toggle" });
+                $("<input>", {
+                    type: "checkbox",
+                    id: "detail-mastered",
+                    checked: Boolean(record.is_mastered)
+                }).appendTo($masteryLabel);
+                $masteryLabel.append(" Mastered").appendTo($form);
+                const $notesLabel = $("<label>", { class: "collection-notes-field" }).text("Notes");
+                $("<textarea>", {
+                    id: "detail-notes",
+                    rows: 4,
+                    placeholder: "Add notes about this Sprite."
+                }).val(record.notes || "").appendTo($notesLabel);
+                $notesLabel.appendTo($form);
+                const $saveStatus = $("<p>", {
+                    class: "detail-save-status",
+                    role: "status",
+                    "aria-live": "polite"
+                }).appendTo($form);
+                $("<button>", {
+                    class: "button button-dark",
+                    type: "submit",
+                    text: "Save Changes"
+                }).appendTo($form);
+                $form.prop("hidden", false);
+
+                $form.off("submit.detailEdit").on("submit.detailEdit", function (event) {
+                    event.preventDefault();
+                    const $saveButton = $form.find("button[type='submit']");
+                    $saveButton.prop("disabled", true);
+                    $saveStatus.text("Saving…");
+                    pb.collection("user_sprites").update(record.id, {
+                        is_mastered: $form.find("#detail-mastered").prop("checked"),
+                        notes: $form.find("#detail-notes").val().trim()
+                    })
+                        .then(function (updatedRecord) {
+                            record.is_mastered = updatedRecord.is_mastered;
+                            record.notes = updatedRecord.notes;
+                            $("[data-personal-mastered]").text(record.is_mastered ? "Mastered" : "Not Mastered");
+                            $("[data-personal-notes]").text(record.notes || "No notes saved.");
+                            $saveStatus.text("Saved.");
+                            $saveButton.prop("disabled", false);
+                        })
+                        .catch(function (error) {
+                            console.error("Unable to update the personal sprite record.", error);
+                            $saveStatus.attr("role", "alert").text("Could not save changes. Please try again.");
+                            $saveButton.prop("disabled", false);
+                        });
+                });
+            })
+            .catch(function (error) {
+                console.error("Unable to load the detail editor.", error);
+            });
+    }
+
+    pb.authStore.onChange(loadEditor);
+    loadEditor();
+});
+
 // Phase 6: read the authenticated user's personal sprite collection.
 $(function () {
     const $collection = $("[data-pocketbase-collection-page]");
@@ -457,15 +544,18 @@ $(function () {
             $copy.appendTo($link);
             $tags.appendTo($copy);
             $link.appendTo($card);
-            const $progress = $("<div>", { class: "mastery-progress" });
-            $("<progress>", {
-                value: progress,
-                max: 100,
-                text: progress + "%",
-                "aria-label": name + " mastery: " + progress + "%"
-            }).appendTo($progress);
-            $("<span>").text(progress + "%").appendTo($progress);
-            $progress.appendTo($card);
+            const $edit = $("<div>", {
+                class: "collection-mastery-control",
+                "data-user-sprite-id": entry.collection.id
+            });
+            const $masteryLabel = $("<label>", { class: "collection-mastery-toggle" });
+            $("<input>", {
+                type: "checkbox",
+                class: "collection-mastery-checkbox",
+                checked: mastered
+            }).appendTo($masteryLabel);
+            $masteryLabel.append(" Mastered").appendTo($edit);
+            $edit.appendTo($card);
             $card.appendTo($grid);
         });
 
@@ -474,7 +564,9 @@ $(function () {
         }).length;
         $collection.find(".collection-summary .collection-stat").eq(0).find("strong").text(records.length + " / " + records.length);
         $collection.find(".collection-summary .collection-stat").eq(1).find("strong").text(masteredCount + " / " + records.length);
-        $status.text(visible.length === 0 ? "No sprites match your collection filters." : "");
+        $status.text(records.length === 0
+            ? "Your collection is empty. Add a sprite from the Browse page."
+            : (visible.length === 0 ? "No sprites match your collection filters." : ""));
     }
 
     function loadCollection() {
@@ -501,7 +593,6 @@ $(function () {
             .then(function (records) {
                 collectionRecords = records;
                 if (records.length === 0) {
-                    $status.text("Your collection is empty. Add a sprite from the Browse page.");
                     render(records);
                     return;
                 }
@@ -519,6 +610,39 @@ $(function () {
         render(collectionRecords);
     }).on("input change", "input, select", function () {
         render(collectionRecords);
+    });
+    $grid.on("change", ".collection-mastery-checkbox", function () {
+        const $button = $(this);
+        const $edit = $button.closest(".collection-mastery-control");
+        const collectionId = $edit.attr("data-user-sprite-id");
+        const entry = collectionRecords.find(function (item) {
+            return item.collection.id === collectionId;
+        });
+        if (!entry) {
+            return;
+        }
+
+        const mastered = $button.prop("checked");
+        $button.prop("disabled", true);
+        pb.collection("user_sprites").update(collectionId, {
+            is_mastered: mastered
+        })
+            .then(function (updatedRecord) {
+                entry.collection = updatedRecord;
+                const $card = $edit.closest(".sprite-card");
+                $card.find(".collection-status-tag").text(mastered ? "Mastered" : "In Progress");
+                $button.prop("disabled", false);
+                const masteredCount = collectionRecords.filter(function (item) {
+                    return Boolean(item.collection.is_mastered);
+                }).length;
+                $collection.find(".collection-summary .collection-stat").eq(1).find("strong")
+                    .text(masteredCount + " / " + collectionRecords.length);
+            })
+            .catch(function (error) {
+                console.error("Unable to update the personal sprite record.", error);
+                $button.prop("disabled", false);
+                $button.prop("checked", !mastered);
+            });
     });
     pb.authStore.onChange(loadCollection);
     loadCollection();
